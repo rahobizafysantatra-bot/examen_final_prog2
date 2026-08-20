@@ -29,6 +29,11 @@ public class TransactionController {
         return transactionService.findByType(type);
     }
 
+    @GetMapping
+    public List<Transaction> findAll(){
+        return transactionService.findAll();
+    }
+
     @PostMapping
     public ResponseEntity<Transaction> create(
             @RequestBody TransactionCreateDto transactionCreateDto) {
