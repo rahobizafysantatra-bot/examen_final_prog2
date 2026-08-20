@@ -25,14 +25,13 @@ public class TransactionController {
     }
 
     @GetMapping
-    public List<Transaction> findByType(@RequestParam("type") String type) {
-        return transactionService.findByType(type);
-    }
-
-    @GetMapping
-    public List<Transaction> findAll(){
+    public List<Transaction> findByType(@RequestParam(value = "type", required = false) String type) {
+        if (type != null && !type.isBlank()) {
+            return transactionService.findByType(type);
+        }
         return transactionService.findAll();
     }
+
 
     @PostMapping
     public ResponseEntity<Transaction> create(
