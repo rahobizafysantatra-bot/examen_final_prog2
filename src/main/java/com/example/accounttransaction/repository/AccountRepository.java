@@ -21,13 +21,21 @@ public class AccountRepository {
 
     public AccountRepository(
             DatabaseConnectionFactory connectionFactory,
-            TransactionRepository transactionRepository) {
+            TransactionRepository transactionRepository
+    ) {
         this.connectionFactory = connectionFactory;
         this.transactionRepository = transactionRepository;
     }
 
     public List<Account> findAll() {
-        String sql = "SELECT id, account_type FROM accounts ORDER BY id ASC";
+        String sql = """
+                SELECT
+                    id,
+                    account_type
+                FROM accounts
+                ORDER BY id ASC
+                """;
+
         List<Account> accountsWithoutTransactions = new ArrayList<>();
 
         try (Connection connection = connectionFactory.getConnection();
@@ -35,12 +43,11 @@ public class AccountRepository {
              ResultSet resultSet = statement.executeQuery()) {
 
             while (resultSet.next()) {
-                accountsWithoutTransactions.add(new Account(
-                        resultSet.getString("id"),
-                        AccountType.valueOf(resultSet.getString("account_type")),
-                        List.of()
-                ));
+                accountsWithoutTransactions.add(
+                        mapAccountWithoutTransactions(resultSet)
+                );
             }
+
         } catch (SQLException e) {
             System.out.println("SQL Error : " + e.getMessage());
             return List.of();
@@ -50,13 +57,24 @@ public class AccountRepository {
                 .map(account -> new Account(
                         account.getId(),
                         account.getAccountType(),
-                        List.copyOf(transactionRepository.findAllByAccountId(account.getId()))
+                        List.copyOf(
+                                transactionRepository.findAllByAccountId(
+                                        account.getId()
+                                )
+                        )
                 ))
                 .toList();
     }
 
     public Account findById(String id) {
-        String sql = "SELECT id, account_type FROM accounts WHERE id = ?";
+        String sql = """
+                SELECT
+                    id,
+                    account_type
+                FROM accounts
+                WHERE id = ?
+                """;
+
         Account accountWithoutTransactions = null;
 
         try (Connection connection = connectionFactory.getConnection();
@@ -66,13 +84,11 @@ public class AccountRepository {
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
-                    accountWithoutTransactions = new Account(
-                            resultSet.getString("id"),
-                            AccountType.valueOf(resultSet.getString("account_type")),
-                            List.of()
-                    );
+                    accountWithoutTransactions =
+                            mapAccountWithoutTransactions(resultSet);
                 }
             }
+
         } catch (SQLException e) {
             System.out.println("SQL Error : " + e.getMessage());
             return null;
@@ -83,7 +99,9 @@ public class AccountRepository {
         }
 
         List<Transaction> transactions =
-                transactionRepository.findAllByAccountId(accountWithoutTransactions.getId());
+                transactionRepository.findAllByAccountId(
+                        accountWithoutTransactions.getId()
+                );
 
         return new Account(
                 accountWithoutTransactions.getId(),
@@ -93,7 +111,11 @@ public class AccountRepository {
     }
 
     public boolean existsById(String id) {
-        String sql = "SELECT 1 FROM accounts WHERE id = ?";
+        String sql = """
+                SELECT 1
+                FROM accounts
+                WHERE id = ?
+                """;
 
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -103,6 +125,7 @@ public class AccountRepository {
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next();
             }
+
         } catch (SQLException e) {
             System.out.println("SQL Error : " + e.getMessage());
         }
@@ -112,26 +135,45 @@ public class AccountRepository {
 
     public Account save(Account account) {
         String sql = """
-                INSERT INTO accounts (id, account_type)
-                VALUES (?, ?)
-                RETURNING id, account_type
+                INSERT INTO accounts (
+                    id,
+                    account_type
+                )
+                VALUES (
+                    ?,
+                    CAST(? AS account_type)
+                )
+                RETURNING
+                    id,
+                    account_type
                 """;
 
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
 
-            statement.setString(1, account.getId());
-            statement.setString(2, account.getAccountType().name());
+            statement.setString(
+                    1,
+                    account.getId()
+            );
+
+            statement.setString(
+                    2,
+                    account.getAccountType().name()
+            );
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
+                    Account savedAccount =
+                            mapAccountWithoutTransactions(resultSet);
+
                     return new Account(
-                            resultSet.getString("id"),
-                            AccountType.valueOf(resultSet.getString("account_type")),
+                            savedAccount.getId(),
+                            savedAccount.getAccountType(),
                             List.of()
                     );
                 }
             }
+
         } catch (SQLException e) {
             System.out.println("SQL Error : " + e.getMessage());
         }
@@ -142,27 +184,35 @@ public class AccountRepository {
     public Account update(Account account) {
         String sql = """
                 UPDATE accounts
-                SET account_type = ?
+                SET account_type = CAST(? AS account_type)
                 WHERE id = ?
-                RETURNING id, account_type
+                RETURNING
+                    id,
+                    account_type
                 """;
+
         Account updatedAccount = null;
 
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
 
-            statement.setString(1, account.getAccountType().name());
-            statement.setString(2, account.getId());
+            statement.setString(
+                    1,
+                    account.getAccountType().name()
+            );
+
+            statement.setString(
+                    2,
+                    account.getId()
+            );
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
-                    updatedAccount = new Account(
-                            resultSet.getString("id"),
-                            AccountType.valueOf(resultSet.getString("account_type")),
-                            List.of()
-                    );
+                    updatedAccount =
+                            mapAccountWithoutTransactions(resultSet);
                 }
             }
+
         } catch (SQLException e) {
             System.out.println("SQL Error : " + e.getMessage());
             return null;
@@ -172,25 +222,48 @@ public class AccountRepository {
             return null;
         }
 
+        List<Transaction> transactions =
+                transactionRepository.findAllByAccountId(
+                        updatedAccount.getId()
+                );
+
         return new Account(
                 updatedAccount.getId(),
                 updatedAccount.getAccountType(),
-                List.copyOf(transactionRepository.findAllByAccountId(updatedAccount.getId()))
+                List.copyOf(transactions)
         );
     }
 
     public boolean deleteById(String id) {
-        String sql = "DELETE FROM accounts WHERE id = ?";
+        String sql = """
+                DELETE FROM accounts
+                WHERE id = ?
+                """;
 
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
 
             statement.setString(1, id);
+
             return statement.executeUpdate() > 0;
+
         } catch (SQLException e) {
             System.out.println("SQL Error : " + e.getMessage());
         }
 
         return false;
+    }
+
+    private Account mapAccountWithoutTransactions(
+            ResultSet resultSet
+    ) throws SQLException {
+
+        return new Account(
+                resultSet.getString("id"),
+                AccountType.valueOf(
+                        resultSet.getString("account_type")
+                ),
+                List.of()
+        );
     }
 }
