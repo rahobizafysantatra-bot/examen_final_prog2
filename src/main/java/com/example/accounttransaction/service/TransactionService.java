@@ -26,6 +26,9 @@ public class TransactionService {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
     }
+    public List<Transaction> findAll() {
+        return transactionRepository.findAll();
+    }
 
     public List<Transaction> findByType(String rawType) {
         TransactionType transactionType;
